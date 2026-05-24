@@ -82,7 +82,10 @@ function scanUrl(url) {
                   }
                 }
 
+                // Reject bogus inflated reference prices: real discounts are ≤ 80%
+                // and original price is never more than 10× the sale price.
                 if (!originalPrice || !salePrice || originalPrice <= salePrice) return [];
+                if (originalPrice > salePrice * 10) return [];
                 const title = item.querySelector('img[alt]')?.getAttribute('alt')?.trim();
                 const href = item.querySelector('a[href]')?.getAttribute('href');
                 const src = item.querySelector('img')?.getAttribute('src');

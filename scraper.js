@@ -87,6 +87,7 @@ export function parseDeals(html, baseUrl) {
     const src = item.querySelector(SELECTORS.image)?.getAttribute('src');
 
     if (!title || !originalPrice || !salePrice || originalPrice <= salePrice) return [];
+    if (originalPrice > salePrice * 10) return [];
 
     const discountPct = Math.round(((originalPrice - salePrice) / originalPrice) * 100);
     const url = href ? new URL(href, baseUrl).href : baseUrl;
@@ -152,6 +153,7 @@ export function extractDealsFromDOM() {
     const src = item.querySelector('img')?.getAttribute('src');
 
     if (!title || !originalPrice || !salePrice || originalPrice <= salePrice) return [];
+    if (originalPrice > salePrice * 10) return [];
 
     const discountPct = Math.round(((originalPrice - salePrice) / originalPrice) * 100);
     const url = href ? new URL(href, baseUrl).href : baseUrl;
