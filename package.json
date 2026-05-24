@@ -13,8 +13,7 @@
   "jest": {
     "testEnvironment": "jsdom",
     "transform": {},
-    "extensionsToTreatAsEsm": [".js"],
-    "moduleNameMapper": {
+"moduleNameMapper": {
       "^(\\.{1,2}/.*)\\.js$": "$1"
     }
   }
