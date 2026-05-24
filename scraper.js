@@ -73,8 +73,7 @@ export function parseDeals(html, baseUrl) {
       }
     }
 
-    const title = item.querySelector(SELECTORS.title)?.getAttribute('alt')?.trim() ||
-                  item.querySelector(SELECTORS.title)?.textContent?.trim();
+    const title = item.querySelector(SELECTORS.title)?.getAttribute('alt')?.trim();
     const href = item.querySelector(SELECTORS.link)?.getAttribute('href');
     const src = item.querySelector(SELECTORS.image)?.getAttribute('src');
 

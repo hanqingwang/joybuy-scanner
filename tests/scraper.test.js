@@ -67,7 +67,7 @@ describe('parseDeals', () => {
     `).join('');
     const html = `<html><body>${items}</body></html>`;
     const deals = parseDeals(html, 'https://www.joybuy.fr');
-    expect(deals.length).toBeLessThanOrEqual(10);
+    expect(deals.length).toBe(10);
   });
 
   test('skips items with missing or unparseable prices', () => {
@@ -88,6 +88,26 @@ describe('parseDeals', () => {
     const deals = parseDeals(html, 'https://www.joybuy.fr');
     expect(deals.length).toBe(1);
     expect(deals[0].title).toBe('Good Item');
+  });
+
+  test('skips items with no data-exp and no productCartItem fallback', () => {
+    const html = `
+      <html><body>
+        <div class="sgm_pc" data-exp='{"biz_type":"product","json_param":{"firprice":"100.00","secprice":"60.00","skuid":"123"}}'>
+          <a href="/dp/good/123">
+            <img alt="Good Product" src="https://img.joybuy.fr/good.jpg" />
+          </a>
+        </div>
+        <div class="sgm_pc">
+          <a href="/dp/bad/456">
+            <img alt="No Price Product" src="https://img.joybuy.fr/bad.jpg" />
+          </a>
+        </div>
+      </body></html>
+    `;
+    const deals = parseDeals(html, 'https://www.joybuy.fr');
+    expect(deals.length).toBe(1);
+    expect(deals[0].title).toBe('Good Product');
   });
 
   test('returns empty array for HTML with no matching items', () => {
