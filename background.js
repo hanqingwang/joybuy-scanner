@@ -64,13 +64,17 @@ function scanUrl(url) {
                 } catch (_) { return []; }
               });
 
-              // Return diagnostic alongside deals so service worker can log it
-              const dpLinks = document.querySelectorAll('a[href*="/dp/"]').length;
-              const dataExpEls = document.querySelectorAll('[data-exp]').length;
-              const bodySnippet = document.body.innerHTML.slice(0, 200);
+              // Dump first 3 cards' raw data-exp for diagnosing filter failures
+              const cardSamples = Array.from(cards).slice(0, 3).map(card => {
+                try {
+                  const e = JSON.parse(card.getAttribute('data-exp') || '{}');
+                  const p = e.json_param || {};
+                  return `[${e.biz_type}|fir=${p.firprice}|sec=${p.secprice}|sku=${p.skuid}]`;
+                } catch { return '[parse-err]'; }
+              }).join(' ');
               resolve({
                 deals,
-                diag: `url=${location.href} title=${document.title.slice(0,40)} sgm_pc=${cards.length} dpLinks=${dpLinks} dataExp=${dataExpEls} body=${bodySnippet}`,
+                diag: `url=${location.href.slice(22,60)} sgm_pc=${cards.length} samples=${cardSamples}`,
               });
             } else {
               setTimeout(attempt, 500);
