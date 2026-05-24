@@ -53,8 +53,8 @@ export async function scanDeals() {
                   const params = exp.json_param || {};
                   const fir = parseFloat(params.firprice);
                   const sec = parseFloat(params.secprice);
-                  if (!isNaN(fir) && fir > 0) salePrice = fir;
-                  if (!isNaN(sec) && sec > 0) originalPrice = sec;
+                  if (!isNaN(fir) && fir > 0) originalPrice = fir;
+                  if (!isNaN(sec) && sec > 0) salePrice = sec;
                 } catch (_) { return []; }
                 const title = item.querySelector('img[alt]')?.getAttribute('alt')?.trim();
                 const href = item.querySelector('a[href]')?.getAttribute('href');

@@ -2,15 +2,15 @@
 // The homepage serves SSR product listings. Product cards use the class "sgm_pc"
 // (stable) with a "data-exp" JSON attribute.
 //
-// IMPORTANT — verified against product detail page RSC payloads (2025-05):
-//   data-exp.firprice = sale price (maps to mainPrice on detail page)
-//   data-exp.secprice = crossed-out original price (maps to crossOffPrice on detail page)
-// The naming is counter-intuitive ("fir" = first/sale, "sec" = second/original).
+// IMPORTANT — verified against live homepage card data-exp (2025-05):
+//   data-exp.firprice = crossed-out original price (the higher "was" price)
+//   data-exp.secprice = sale price (the lower current price)
+//   firprice = -100 is a sentinel meaning "no original price" — skip these items.
 // .productCartItem DOM nodes render inflated MSRP reference values — do NOT use them.
 //
 // Real DOM structure observed on joybuy.fr (2025-05):
 //   <div class="sgm_pc style_UK_product_card__<hash>..."
-//        data-exp='{"biz_type":"product","json_param":{"firprice":"26.64","secprice":"28.39","skuid":"10177595",...}}'>
+//        data-exp='{"biz_type":"product","json_param":{"firprice":"6.99","secprice":"2.99","skuid":"10177595",...}}'>
 //     <a href="/dp/<slug>/<skuId>">
 //       <img alt="<product title>" class="style_UK_skuImg__<hash>" src="//images4.joy-sourcing.com/...">
 //     </a>
@@ -55,13 +55,12 @@ export function parseDeals(html, baseUrl) {
         const exp = JSON.parse(dataExp);
         if (exp.biz_type !== 'product') return [];
         const params = exp.json_param || {};
-        // On joybuy.fr homepage cards: firprice = sale price (mainPrice),
-        // secprice = crossed-out original price (crossOffPrice).
-        // .productCartItem DOM nodes contain inflated reference prices — do not use them.
+        // firprice = crossed-out original ("was") price; -100 means no original price.
+        // secprice = current sale price.
         const fir = parseFloat(params.firprice);
         const sec = parseFloat(params.secprice);
-        if (!isNaN(fir) && fir > 0) salePrice = fir;
-        if (!isNaN(sec) && sec > 0) originalPrice = sec;
+        if (!isNaN(fir) && fir > 0) originalPrice = fir;
+        if (!isNaN(sec) && sec > 0) salePrice = sec;
       } catch (_) {
         return [];
       }
@@ -106,8 +105,8 @@ export function extractDealsFromDOM() {
     let originalPrice = null;
     let salePrice = null;
 
-    // firprice = sale price (mainPrice), secprice = crossed-out original (crossOffPrice).
-    // .productCartItem DOM nodes contain inflated reference prices — do not use them.
+    // firprice = crossed-out original ("was") price; -100 sentinel = no original price.
+    // secprice = current sale price.
     const dataExp = item.getAttribute('data-exp');
     if (dataExp) {
       try {
@@ -116,8 +115,8 @@ export function extractDealsFromDOM() {
         const params = exp.json_param || {};
         const fir = parseFloat(params.firprice);
         const sec = parseFloat(params.secprice);
-        if (!isNaN(fir) && fir > 0) salePrice = fir;
-        if (!isNaN(sec) && sec > 0) originalPrice = sec;
+        if (!isNaN(fir) && fir > 0) originalPrice = fir;
+        if (!isNaN(sec) && sec > 0) salePrice = sec;
       } catch (_) {
         return [];
       }
