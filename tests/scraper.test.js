@@ -1,10 +1,9 @@
 import { parseDeals, extractDealsFromDOM } from '../scraper.js';
 
 // Fixture HTML mirrors the real joybuy.fr DOM structure observed on 2025-05.
-// Product cards use the stable "sgm_pc" class; prices are carried in data-exp JSON
-// (firprice = original price, secprice = sale price) with a .productCartItem DOM
-// fallback. CSS module hashed class names (e.g. style_UK_product_card__XXXXX) are
-// intentionally omitted since they change on every Next.js build.
+// Product cards use the stable "sgm_pc" class. data-exp.secprice = sale price (EUR).
+// data-exp.firprice is an inflated internal reference price and is NOT used.
+// Original (crossed-out) price always comes from .productCartItem[1] in the DOM.
 const FIXTURE_HTML = `
 <html><body>
   <div class="sgm_pc" data-exp='{"biz_type":"product","json_param":{"firprice":"299.99","secprice":"149.99","skuid":"10001"}}'>
@@ -73,15 +72,17 @@ describe('parseDeals', () => {
   test('skips items with missing or unparseable prices', () => {
     const html = `
       <html><body>
-        <div class="sgm_pc" data-exp='{"biz_type":"product","json_param":{"firprice":"-100","secprice":"50.00","skuid":"bad"}}'>
+        <div class="sgm_pc" data-exp='{"biz_type":"product","json_param":{"secprice":"50.00","skuid":"bad"}}'>
           <a href="/dp/bad/bad">
             <img alt="Bad Item" src="https://img.joybuy.fr/bad.jpg" />
           </a>
         </div>
-        <div class="sgm_pc" data-exp='{"biz_type":"product","json_param":{"firprice":"100.00","secprice":"60.00","skuid":"good"}}'>
+        <div class="sgm_pc" data-exp='{"biz_type":"product","json_param":{"secprice":"60.00","skuid":"good"}}'>
           <a href="/dp/good/good">
             <img alt="Good Item" src="https://img.joybuy.fr/good.jpg" />
           </a>
+          <div class="productCartItem">60,00 €</div>
+          <div class="productCartItem">100,00 €</div>
         </div>
       </body></html>
     `;
@@ -93,10 +94,12 @@ describe('parseDeals', () => {
   test('skips items with no data-exp and no productCartItem fallback', () => {
     const html = `
       <html><body>
-        <div class="sgm_pc" data-exp='{"biz_type":"product","json_param":{"firprice":"100.00","secprice":"60.00","skuid":"123"}}'>
+        <div class="sgm_pc" data-exp='{"biz_type":"product","json_param":{"secprice":"60.00","skuid":"123"}}'>
           <a href="/dp/good/123">
             <img alt="Good Product" src="https://img.joybuy.fr/good.jpg" />
           </a>
+          <div class="productCartItem">60,00 €</div>
+          <div class="productCartItem">100,00 €</div>
         </div>
         <div class="sgm_pc">
           <a href="/dp/bad/456">
@@ -121,8 +124,10 @@ describe('parseDeals', () => {
         <div class="sgm_pc" data-exp='{"biz_type":"banner","json_param":{}}'>
           <a href="/cms/sale"><img alt="Sale Banner" src="banner.jpg" /></a>
         </div>
-        <div class="sgm_pc" data-exp='{"biz_type":"product","json_param":{"firprice":"80.00","secprice":"40.00","skuid":"p1"}}'>
+        <div class="sgm_pc" data-exp='{"biz_type":"product","json_param":{"secprice":"40.00","skuid":"p1"}}'>
           <a href="/dp/real-product/p1"><img alt="Real Product" src="product.jpg" /></a>
+          <div class="productCartItem">40,00 €</div>
+          <div class="productCartItem">80,00 €</div>
         </div>
       </body></html>
     `;
@@ -136,10 +141,12 @@ describe('parsePrice (via parseDeals)', () => {
   test('handles European format: 1.299,00 € (dot thousands, comma decimal)', () => {
     const html = `
       <html><body>
-        <div class="sgm_pc" data-exp='{"biz_type":"product","json_param":{"firprice":"1299.00","secprice":"799.00","skuid":"tv1"}}'>
+        <div class="sgm_pc" data-exp='{"biz_type":"product","json_param":{"secprice":"-100","skuid":"tv1"}}'>
           <a href="/dp/samsung-tv/tv1">
             <img alt="Samsung TV" src="img.jpg" />
           </a>
+          <div class="productCartItem">799,00 €</div>
+          <div class="productCartItem">1.299,00 €</div>
         </div>
       </body></html>`;
     const deals = parseDeals(html, 'https://www.joybuy.fr');

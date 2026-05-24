@@ -47,30 +47,28 @@ export function parseDeals(html, baseUrl) {
     let originalPrice = null;
     let salePrice = null;
 
+    // data-exp.firprice is an inflated internal reference price, NOT the displayed
+    // crossed-out price. Use data-exp only to filter non-product cards and read secprice.
     const dataExp = item.getAttribute('data-exp');
     if (dataExp) {
       try {
         const exp = JSON.parse(dataExp);
         if (exp.biz_type !== 'product') return [];
-        const params = exp.json_param || {};
-        const fir = parseFloat(params.firprice);
-        const sec = parseFloat(params.secprice);
-        if (!isNaN(fir) && fir > 0) originalPrice = fir;
+        const sec = parseFloat((exp.json_param || {}).secprice);
         if (!isNaN(sec) && sec > 0) salePrice = sec;
       } catch (_) {
         // fall through to DOM parsing
       }
     }
 
-    // DOM fallback for prices (using .productCartItem spans)
-    if (originalPrice === null || salePrice === null) {
-      const priceContainers = Array.from(item.querySelectorAll(SELECTORS.salePriceContainer));
-      if (priceContainers.length >= 1 && salePrice === null) {
-        salePrice = parsePrice(priceContainers[0].textContent.trim());
-      }
-      if (priceContainers.length >= 2 && originalPrice === null) {
-        originalPrice = parsePrice(priceContainers[1].textContent.trim());
-      }
+    // .productCartItem: [0] = sale price, [1] = crossed-out original price.
+    // Always read originalPrice from DOM — data-exp.firprice is unreliable.
+    const priceContainers = Array.from(item.querySelectorAll(SELECTORS.salePriceContainer));
+    if (priceContainers.length >= 1 && salePrice === null) {
+      salePrice = parsePrice(priceContainers[0].textContent.trim());
+    }
+    if (priceContainers.length >= 2) {
+      originalPrice = parsePrice(priceContainers[1].textContent.trim());
     }
 
     const title = item.querySelector(SELECTORS.title)?.getAttribute('alt')?.trim();
@@ -112,30 +110,28 @@ export function extractDealsFromDOM() {
     let originalPrice = null;
     let salePrice = null;
 
+    // data-exp.firprice is an inflated internal reference price, NOT the displayed
+    // crossed-out price. Use data-exp only to filter non-product cards and read secprice.
     const dataExp = item.getAttribute('data-exp');
     if (dataExp) {
       try {
         const exp = JSON.parse(dataExp);
         if (exp.biz_type !== 'product') return [];
-        const params = exp.json_param || {};
-        const fir = parseFloat(params.firprice);
-        const sec = parseFloat(params.secprice);
-        if (!isNaN(fir) && fir > 0) originalPrice = fir;
+        const sec = parseFloat((exp.json_param || {}).secprice);
         if (!isNaN(sec) && sec > 0) salePrice = sec;
       } catch (_) {
         // fall through to DOM parsing
       }
     }
 
-    // DOM fallback via .productCartItem (non-hashed class on price containers)
-    if (originalPrice === null || salePrice === null) {
-      const priceContainers = Array.from(item.querySelectorAll('.productCartItem'));
-      if (priceContainers.length >= 1 && salePrice === null) {
-        salePrice = parsePrice(priceContainers[0].textContent.trim());
-      }
-      if (priceContainers.length >= 2 && originalPrice === null) {
-        originalPrice = parsePrice(priceContainers[1].textContent.trim());
-      }
+    // .productCartItem: [0] = sale price, [1] = crossed-out original price.
+    // Always read originalPrice from DOM — data-exp.firprice is unreliable.
+    const priceContainers = Array.from(item.querySelectorAll('.productCartItem'));
+    if (priceContainers.length >= 1 && salePrice === null) {
+      salePrice = parsePrice(priceContainers[0].textContent.trim());
+    }
+    if (priceContainers.length >= 2) {
+      originalPrice = parsePrice(priceContainers[1].textContent.trim());
     }
 
     const title = item.querySelector('img[alt]')?.getAttribute('alt')?.trim();
