@@ -13,29 +13,42 @@ export async function setupAlarm() {
 export async function scanDeals() {
   return new Promise((resolve, reject) => {
     let tabId = null;
+    let timeout = null;
 
-    chrome.tabs.create({ url: TARGET_URLS[0], active: false }, tab => {
-      tabId = tab.id;
-    });
+    function cleanup() {
+      clearTimeout(timeout);
+      chrome.tabs.onUpdated.removeListener(onTabUpdated);
+    }
 
     function onTabUpdated(updatedTabId, changeInfo) {
       if (updatedTabId !== tabId || changeInfo.status !== 'complete') return;
-      chrome.tabs.onUpdated.removeListener(onTabUpdated);
+      cleanup();
 
       chrome.scripting.executeScript(
         { target: { tabId }, func: extractDealsFromDOM },
         results => {
+          const err = chrome.runtime.lastError;
           chrome.tabs.remove(tabId);
-          if (chrome.runtime.lastError) {
-            reject(new Error(chrome.runtime.lastError.message));
-            return;
-          }
+          if (err) { reject(new Error(err.message)); return; }
           resolve(results?.[0]?.result ?? []);
         }
       );
     }
 
-    chrome.tabs.onUpdated.addListener(onTabUpdated);
+    chrome.tabs.create({ url: TARGET_URLS[0], active: false }, tab => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+        return;
+      }
+      tabId = tab.id;
+      chrome.tabs.onUpdated.addListener(onTabUpdated);
+
+      timeout = setTimeout(() => {
+        cleanup();
+        chrome.tabs.remove(tabId);
+        reject(new Error('scan timed out'));
+      }, 30000);
+    });
   });
 }
 
@@ -65,6 +78,7 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onInstalled) {
   chrome.runtime.onInstalled.addListener(setupAlarm);
   chrome.alarms.onAlarm.addListener(handleAlarm);
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    if (msg.type !== 'scan') return false;
     handleMessage(msg, sender, sendResponse);
     return true;
   });
