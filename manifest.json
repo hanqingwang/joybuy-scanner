@@ -3,7 +3,7 @@
   "name": "JoyBuy Deal Scanner",
   "version": "1.0.0",
   "description": "Finds the top 10 biggest promotions on joybuy.fr",
-  "permissions": ["alarms", "storage"],
+  "permissions": ["alarms", "storage", "tabs", "scripting"],
   "host_permissions": ["https://www.joybuy.fr/*"],
   "background": {
     "service_worker": "background.js",

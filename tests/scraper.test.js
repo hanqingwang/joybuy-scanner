@@ -1,4 +1,4 @@
-import { parseDeals } from '../scraper.js';
+import { parseDeals, extractDealsFromDOM } from '../scraper.js';
 
 // Fixture HTML mirrors placeholder selectors (joybuy.fr is JS-rendered; no product HTML available via curl)
 const FIXTURE_HTML = `
@@ -98,6 +98,54 @@ describe('parseDeals', () => {
 
   test('returns empty array for HTML with no matching items', () => {
     const deals = parseDeals('<html><body><p>No deals</p></body></html>', 'https://www.joybuy.fr');
+    expect(deals).toEqual([]);
+  });
+});
+
+describe('extractDealsFromDOM', () => {
+  beforeEach(() => {
+    document.body.innerHTML = `
+      <div class="product-item">
+        <a href="/product/phone-123">
+          <img src="https://img.joybuy.fr/phone.jpg" />
+          <h3 class="product-title">Xiaomi Redmi Note 13</h3>
+          <del class="original-price">299.99</del>
+          <span class="sale-price">149.99</span>
+        </a>
+      </div>
+      <div class="product-item">
+        <a href="/product/watch-456">
+          <img src="https://img.joybuy.fr/watch.jpg" />
+          <h3 class="product-title">Amazfit GTR 4</h3>
+          <del class="original-price">149.99</del>
+          <span class="sale-price">89.99</span>
+        </a>
+      </div>
+    `;
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  test('extracts deals from the live DOM', () => {
+    const deals = extractDealsFromDOM();
+    expect(deals.length).toBe(2);
+    expect(deals[0]).toMatchObject({
+      title: 'Xiaomi Redmi Note 13',
+      originalPrice: 299.99,
+      salePrice: 149.99,
+    });
+  });
+
+  test('returns deals sorted descending by discountPct', () => {
+    const deals = extractDealsFromDOM();
+    expect(deals[0].discountPct).toBeGreaterThanOrEqual(deals[1].discountPct);
+  });
+
+  test('returns empty array when no product items in DOM', () => {
+    document.body.innerHTML = '<p>No deals</p>';
+    const deals = extractDealsFromDOM();
     expect(deals).toEqual([]);
   });
 });
