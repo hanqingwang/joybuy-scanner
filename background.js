@@ -39,29 +39,58 @@ function scanUrl(url) {
             }
             const cards = document.querySelectorAll('.sgm_pc');
             if (cards.length > 0 || Date.now() >= deadline) {
+              // parsePrice handles European decimal format (e.g. "1.299,00 €")
+              function parsePrice(text) {
+                if (!text) return null;
+                const cleaned = text.replace(/[^\d.,]/g, '');
+                const normalised = cleaned.replace(/\.(?=\d{3}(?:[,]|$))/g, '').replace(',', '.');
+                const n = parseFloat(normalised);
+                return isNaN(n) ? null : n;
+              }
+
               const baseUrl = 'https://www.joybuy.fr';
               const deals = Array.from(cards).flatMap(item => {
                 const dataExp = item.getAttribute('data-exp');
                 if (!dataExp) return [];
+                let originalPrice = null, salePrice = null, skuid = '';
                 try {
                   const exp = JSON.parse(dataExp);
                   if (exp.biz_type !== 'product') return [];
-                  const params = exp.json_param || {};
-                  const fir = parseFloat(params.firprice);
-                  const sec = parseFloat(params.secprice);
-                  const originalPrice = (!isNaN(fir) && fir > 0) ? fir : null;
-                  const salePrice = (!isNaN(sec) && sec > 0) ? sec : null;
-                  if (!originalPrice || !salePrice || originalPrice <= salePrice) return [];
-                  const skuid = params.skuid || '';
-                  const title = item.querySelector('img[alt]')?.getAttribute('alt')?.trim();
-                  const href = item.querySelector('a[href]')?.getAttribute('href');
-                  const src = item.querySelector('img')?.getAttribute('src');
-                  if (!title) return [];
-                  const discountPct = Math.round(((originalPrice - salePrice) / originalPrice) * 100);
-                  const url = href ? new URL(href, baseUrl).href : baseUrl;
-                  const imageUrl = src ? (src.startsWith('//') ? 'https:' + src : src) : '';
-                  return [{ skuid, title, originalPrice, salePrice, discountPct, url, imageUrl }];
+                  const p = exp.json_param || {};
+                  skuid = p.skuid || p.sku_id || '';
+                  const fir = parseFloat(p.firprice);
+                  const sec = parseFloat(p.secprice);
+                  const a = (!isNaN(fir) && fir > 0) ? fir : null;
+                  const b = (!isNaN(sec) && sec > 0) ? sec : null;
+                  if (a && b) {
+                    // Take max=original, min=sale — roles vary by page type
+                    originalPrice = Math.max(a, b);
+                    salePrice = Math.min(a, b);
+                  }
                 } catch (_) { return []; }
+
+                // Fallback to DOM when json_param has no prices (category pages)
+                if (!originalPrice || !salePrice) {
+                  const priceEls = Array.from(item.querySelectorAll('.productCartItem'));
+                  if (priceEls.length >= 2) {
+                    const p0 = parsePrice(priceEls[0].textContent);
+                    const p1 = parsePrice(priceEls[1].textContent);
+                    if (p0 && p1) {
+                      originalPrice = Math.max(p0, p1);
+                      salePrice = Math.min(p0, p1);
+                    }
+                  }
+                }
+
+                if (!originalPrice || !salePrice || originalPrice <= salePrice) return [];
+                const title = item.querySelector('img[alt]')?.getAttribute('alt')?.trim();
+                const href = item.querySelector('a[href]')?.getAttribute('href');
+                const src = item.querySelector('img')?.getAttribute('src');
+                if (!title) return [];
+                const discountPct = Math.round(((originalPrice - salePrice) / originalPrice) * 100);
+                const url = href ? new URL(href, baseUrl).href : baseUrl;
+                const imageUrl = src ? (src.startsWith('//') ? 'https:' + src : src) : '';
+                return [{ skuid, title, originalPrice, salePrice, discountPct, url, imageUrl }];
               });
 
               // Dump raw data-exp JSON for first card to see all field names

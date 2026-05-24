@@ -2,19 +2,13 @@
 // The homepage serves SSR product listings. Product cards use the class "sgm_pc"
 // (stable) with a "data-exp" JSON attribute.
 //
-// IMPORTANT — verified against live homepage card data-exp (2025-05):
-//   data-exp.firprice = crossed-out original price (the higher "was" price)
-//   data-exp.secprice = sale price (the lower current price)
-//   firprice = -100 is a sentinel meaning "no original price" — skip these items.
-// .productCartItem DOM nodes render inflated MSRP reference values — do NOT use them.
-//
-// Real DOM structure observed on joybuy.fr (2025-05):
-//   <div class="sgm_pc style_UK_product_card__<hash>..."
-//        data-exp='{"biz_type":"product","json_param":{"firprice":"6.99","secprice":"2.99","skuid":"10177595",...}}'>
-//     <a href="/dp/<slug>/<skuId>">
-//       <img alt="<product title>" class="style_UK_skuImg__<hash>" src="//images4.joy-sourcing.com/...">
-//     </a>
-//   </div>
+// IMPORTANT — firprice/secprice roles vary by page type (verified 2025-05):
+//   Homepage:          fir=original(higher), sec=sale(lower)
+//   /promo/best-seller: fir=sale(lower),     sec=original(higher)  — SWAPPED
+//   Category pages:    json_param missing prices entirely — use DOM fallback
+//   firprice/secprice = -100 is a sentinel meaning "no price" — skip.
+// Strategy: treat max(fir,sec) as original and min(fir,sec) as sale.
+// DOM fallback (.productCartItem) used only when json_param has no prices.
 // All pages that list discounted products. Sourced from sitemap.xml (2025-05).
 // The homepage + all /promo/best-seller category pages.
 export const TARGET_URLS = [
@@ -67,15 +61,24 @@ export function parseDeals(html, baseUrl) {
       try {
         const exp = JSON.parse(dataExp);
         if (exp.biz_type !== 'product') return [];
-        const params = exp.json_param || {};
-        // firprice = crossed-out original ("was") price; -100 means no original price.
-        // secprice = current sale price.
-        const fir = parseFloat(params.firprice);
-        const sec = parseFloat(params.secprice);
-        if (!isNaN(fir) && fir > 0) originalPrice = fir;
-        if (!isNaN(sec) && sec > 0) salePrice = sec;
+        const p = exp.json_param || {};
+        const fir = parseFloat(p.firprice);
+        const sec = parseFloat(p.secprice);
+        const a = (!isNaN(fir) && fir > 0) ? fir : null;
+        const b = (!isNaN(sec) && sec > 0) ? sec : null;
+        if (a && b) { originalPrice = Math.max(a, b); salePrice = Math.min(a, b); }
       } catch (_) {
         return [];
+      }
+    }
+
+    // DOM fallback when json_param has no prices (category pages)
+    if (!originalPrice || !salePrice) {
+      const priceEls = Array.from(item.querySelectorAll(SELECTORS.salePriceContainer));
+      if (priceEls.length >= 2) {
+        const p0 = parsePrice(priceEls[0].textContent);
+        const p1 = parsePrice(priceEls[1].textContent);
+        if (p0 && p1) { originalPrice = Math.max(p0, p1); salePrice = Math.min(p0, p1); }
       }
     }
 
@@ -118,20 +121,29 @@ export function extractDealsFromDOM() {
     let originalPrice = null;
     let salePrice = null;
 
-    // firprice = crossed-out original ("was") price; -100 sentinel = no original price.
-    // secprice = current sale price.
     const dataExp = item.getAttribute('data-exp');
     if (dataExp) {
       try {
         const exp = JSON.parse(dataExp);
         if (exp.biz_type !== 'product') return [];
-        const params = exp.json_param || {};
-        const fir = parseFloat(params.firprice);
-        const sec = parseFloat(params.secprice);
-        if (!isNaN(fir) && fir > 0) originalPrice = fir;
-        if (!isNaN(sec) && sec > 0) salePrice = sec;
+        const p = exp.json_param || {};
+        const fir = parseFloat(p.firprice);
+        const sec = parseFloat(p.secprice);
+        const a = (!isNaN(fir) && fir > 0) ? fir : null;
+        const b = (!isNaN(sec) && sec > 0) ? sec : null;
+        if (a && b) { originalPrice = Math.max(a, b); salePrice = Math.min(a, b); }
       } catch (_) {
         return [];
+      }
+    }
+
+    // DOM fallback when json_param has no prices (category pages)
+    if (!originalPrice || !salePrice) {
+      const priceEls = Array.from(item.querySelectorAll('.productCartItem'));
+      if (priceEls.length >= 2) {
+        const p0 = parsePrice(priceEls[0].textContent);
+        const p1 = parsePrice(priceEls[1].textContent);
+        if (p0 && p1) { originalPrice = Math.max(p0, p1); salePrice = Math.min(p0, p1); }
       }
     }
 
