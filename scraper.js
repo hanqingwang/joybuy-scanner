@@ -1,18 +1,41 @@
-// joybuy.fr is a client-side rendered Next.js SPA — product HTML is not available
-// via a plain HTTP fetch. These selectors are placeholders that match the fixture
-// HTML used in tests. Task 6 (Selector Calibration) will update them once the
-// real DOM structure is observed in a running browser.
+// joybuy.fr is a client-side rendered Next.js SPA (App Router).
+// The homepage (which redirects from /) serves SSR product listings.
+// Product cards use the class "sgm_pc" (stable) with a "data-exp" JSON attribute
+// that contains pricing data (firprice = original, secprice = sale) and skuId.
+// CSS module class names (e.g. style_UK_product_card__XXXXX) have hashed suffixes
+// that change on every deploy, so we avoid relying on them.
+//
+// Real DOM structure observed on joybuy.fr (2025-05):
+//   <div class="sgm_pc style_UK_product_card__<hash>..."
+//        data-exp='{"biz_type":"product","json_param":{"firprice":"32.99","secprice":"19.99","skuid":"10177595",...}}'>
+//     <a href="/dp/<slug>/<skuId>">
+//       <img alt="<product title>" class="style_UK_skuImg__<hash>" src="//images4.joy-sourcing.com/...">
+//     </a>
+//     <div class="style_title__<hash>"><product title></div>
+//     <div class="style_mainPrice__<hash> productCartItem ...">  <!-- sale price spans -->
+//     <div class="style_crossOffPrice__<hash> productCartItem"> <!-- original price spans -->
+//   </div>
 export const TARGET_URLS = [
-  'https://www.joybuy.fr/promotions',
+  'https://www.joybuy.fr/',
 ];
 
+// SELECTORS used by parseDeals (DOM-based, for test fixtures and DOMParser use).
+// We keep the stable class names from the real site; CSS-module-hashed names are
+// listed as comments and used in extractDealsFromDOM via data-exp instead.
 const SELECTORS = {
-  item: '.product-item',
-  title: '.product-title',
-  originalPrice: '.original-price',
-  salePrice: '.sale-price',
-  link: 'a',
+  // Stable: "sgm_pc" is not a CSS module class — it never changes.
+  // We filter further by requiring a data-exp attribute with biz_type=product.
+  item: '.sgm_pc',
+  // Title: the product image alt text equals the product title; also present in
+  // a sibling div. We read from the first img[alt] inside the card.
+  title: 'img[alt]',
+  // Link: the anchor wrapping the product image always has href="/dp/..."
+  link: 'a[href]',
   image: 'img',
+  // Prices come from data-exp JSON (firprice/secprice). DOM fallback selectors:
+  // .productCartItem is a stable non-hashed class applied to both price divs.
+  // The first .productCartItem child is the sale price; the second is the crossed-out original.
+  salePriceContainer: '.productCartItem',
 };
 
 export function parseDeals(html, baseUrl) {
@@ -20,20 +43,46 @@ export function parseDeals(html, baseUrl) {
   const items = Array.from(doc.querySelectorAll(SELECTORS.item));
 
   const deals = items.flatMap(item => {
-    const title = item.querySelector(SELECTORS.title)?.textContent?.trim();
-    const originalText = item.querySelector(SELECTORS.originalPrice)?.textContent?.trim();
-    const saleText = item.querySelector(SELECTORS.salePrice)?.textContent?.trim();
+    // Try to read prices from data-exp JSON first (most reliable)
+    let originalPrice = null;
+    let salePrice = null;
+
+    const dataExp = item.getAttribute('data-exp');
+    if (dataExp) {
+      try {
+        const exp = JSON.parse(dataExp);
+        if (exp.biz_type !== 'product') return [];
+        const params = exp.json_param || {};
+        const fir = parseFloat(params.firprice);
+        const sec = parseFloat(params.secprice);
+        if (!isNaN(fir) && fir > 0) originalPrice = fir;
+        if (!isNaN(sec) && sec > 0) salePrice = sec;
+      } catch (_) {
+        // fall through to DOM parsing
+      }
+    }
+
+    // DOM fallback for prices (using .productCartItem spans)
+    if (originalPrice === null || salePrice === null) {
+      const priceContainers = Array.from(item.querySelectorAll(SELECTORS.salePriceContainer));
+      if (priceContainers.length >= 1 && salePrice === null) {
+        salePrice = parsePrice(priceContainers[0].textContent.trim());
+      }
+      if (priceContainers.length >= 2 && originalPrice === null) {
+        originalPrice = parsePrice(priceContainers[1].textContent.trim());
+      }
+    }
+
+    const title = item.querySelector(SELECTORS.title)?.getAttribute('alt')?.trim() ||
+                  item.querySelector(SELECTORS.title)?.textContent?.trim();
     const href = item.querySelector(SELECTORS.link)?.getAttribute('href');
     const src = item.querySelector(SELECTORS.image)?.getAttribute('src');
-
-    const originalPrice = parsePrice(originalText);
-    const salePrice = parsePrice(saleText);
 
     if (!title || !originalPrice || !salePrice || originalPrice <= salePrice) return [];
 
     const discountPct = Math.round(((originalPrice - salePrice) / originalPrice) * 100);
     const url = href ? new URL(href, baseUrl).href : baseUrl;
-    const imageUrl = src ?? '';
+    const imageUrl = src ? (src.startsWith('//') ? 'https:' + src : src) : '';
 
     return [{ title, originalPrice, salePrice, discountPct, url, imageUrl }];
   });
@@ -43,18 +92,10 @@ export function parseDeals(html, baseUrl) {
     .slice(0, 10);
 }
 
-// Self-contained — re-declares SELECTORS and parsePrice inline because
+// Self-contained — re-declares constants and helpers inline because
 // chrome.scripting.executeScript serializes the function and loses module scope.
 export function extractDealsFromDOM() {
   const baseUrl = 'https://www.joybuy.fr';
-  const SELECTORS = {
-    item: '.product-item',
-    title: '.product-title',
-    originalPrice: '.original-price',
-    salePrice: '.sale-price',
-    link: 'a',
-    image: 'img',
-  };
 
   function parsePrice(text) {
     if (!text) return null;
@@ -65,23 +106,48 @@ export function extractDealsFromDOM() {
     return isNaN(num) ? null : num;
   }
 
-  const items = Array.from(document.querySelectorAll(SELECTORS.item));
+  // Product cards use the stable "sgm_pc" class; data-exp carries price metadata.
+  const items = Array.from(document.querySelectorAll('.sgm_pc'));
 
   const deals = items.flatMap(item => {
-    const title = item.querySelector(SELECTORS.title)?.textContent?.trim();
-    const originalText = item.querySelector(SELECTORS.originalPrice)?.textContent?.trim();
-    const saleText = item.querySelector(SELECTORS.salePrice)?.textContent?.trim();
-    const href = item.querySelector(SELECTORS.link)?.getAttribute('href');
-    const src = item.querySelector(SELECTORS.image)?.getAttribute('src');
+    let originalPrice = null;
+    let salePrice = null;
 
-    const originalPrice = parsePrice(originalText);
-    const salePrice = parsePrice(saleText);
+    const dataExp = item.getAttribute('data-exp');
+    if (dataExp) {
+      try {
+        const exp = JSON.parse(dataExp);
+        if (exp.biz_type !== 'product') return [];
+        const params = exp.json_param || {};
+        const fir = parseFloat(params.firprice);
+        const sec = parseFloat(params.secprice);
+        if (!isNaN(fir) && fir > 0) originalPrice = fir;
+        if (!isNaN(sec) && sec > 0) salePrice = sec;
+      } catch (_) {
+        // fall through to DOM parsing
+      }
+    }
+
+    // DOM fallback via .productCartItem (non-hashed class on price containers)
+    if (originalPrice === null || salePrice === null) {
+      const priceContainers = Array.from(item.querySelectorAll('.productCartItem'));
+      if (priceContainers.length >= 1 && salePrice === null) {
+        salePrice = parsePrice(priceContainers[0].textContent.trim());
+      }
+      if (priceContainers.length >= 2 && originalPrice === null) {
+        originalPrice = parsePrice(priceContainers[1].textContent.trim());
+      }
+    }
+
+    const title = item.querySelector('img[alt]')?.getAttribute('alt')?.trim();
+    const href = item.querySelector('a[href]')?.getAttribute('href');
+    const src = item.querySelector('img')?.getAttribute('src');
 
     if (!title || !originalPrice || !salePrice || originalPrice <= salePrice) return [];
 
     const discountPct = Math.round(((originalPrice - salePrice) / originalPrice) * 100);
     const url = href ? new URL(href, baseUrl).href : baseUrl;
-    const imageUrl = src ?? '';
+    const imageUrl = src ? (src.startsWith('//') ? 'https:' + src : src) : '';
 
     return [{ title, originalPrice, salePrice, discountPct, url, imageUrl }];
   });
