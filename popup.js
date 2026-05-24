@@ -6,7 +6,14 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.disabled = true;
     btn.textContent = 'Scanning...';
 
+    const guard = setTimeout(() => {
+      btn.disabled = false;
+      btn.textContent = 'Scan Now';
+      loadAndRender();
+    }, 35000);
+
     chrome.runtime.sendMessage({ type: 'scan' }, () => {
+      clearTimeout(guard);
       loadAndRender();
       btn.disabled = false;
       btn.textContent = 'Scan Now';
@@ -53,16 +60,16 @@ function renderDeals(deals, scanStatus) {
   }
 
   list.innerHTML = deals.map(deal => `
-    <a class="deal-item" href="${escHtml(deal.url)}" target="_blank">
+    <a class="deal-item" href="${safeUrl(deal.url)}" target="_blank" rel="noopener noreferrer">
       ${deal.imageUrl
-        ? `<img class="deal-thumb" src="${escHtml(deal.imageUrl)}" alt="" />`
+        ? `<img class="deal-thumb" src="${safeUrl(deal.imageUrl)}" alt="" />`
         : `<div class="deal-thumb-placeholder">🛍️</div>`
       }
       <div class="deal-info">
         <div class="deal-title">${escHtml(deal.title)}</div>
         <div class="deal-prices">
-          <span class="original-price">€${deal.originalPrice.toFixed(2)}</span>
-          <span class="sale-price">€${deal.salePrice.toFixed(2)}</span>
+          <span class="original-price">€${(typeof deal.originalPrice === 'number' ? deal.originalPrice : 0).toFixed(2)}</span>
+          <span class="sale-price">€${(typeof deal.salePrice === 'number' ? deal.salePrice : 0).toFixed(2)}</span>
         </div>
       </div>
       <span class="discount-badge ${deal.discountPct >= 40 ? 'high' : 'medium'}">-${deal.discountPct}%</span>
@@ -85,4 +92,13 @@ function escHtml(str) {
     .replace(/"/g, '&quot;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
+}
+
+function safeUrl(str) {
+  try {
+    const u = new URL(str);
+    return (u.protocol === 'https:' || u.protocol === 'http:') ? escHtml(str) : '#';
+  } catch {
+    return '#';
+  }
 }
