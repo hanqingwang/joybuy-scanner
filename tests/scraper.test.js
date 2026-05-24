@@ -1,31 +1,26 @@
 import { parseDeals, extractDealsFromDOM } from '../scraper.js';
 
 // Fixture HTML mirrors the real joybuy.fr DOM structure observed on 2025-05.
-// Product cards use the stable "sgm_pc" class. data-exp.secprice = sale price (EUR).
-// data-exp.firprice is an inflated internal reference price and is NOT used.
-// Original (crossed-out) price always comes from .productCartItem[1] in the DOM.
+// Product cards use the stable "sgm_pc" class.
+// data-exp.firprice = sale price (mainPrice on detail page).
+// data-exp.secprice = crossed-out original price (crossOffPrice on detail page).
+// .productCartItem DOM nodes contain inflated MSRP reference prices and are NOT used.
 const FIXTURE_HTML = `
 <html><body>
-  <div class="sgm_pc" data-exp='{"biz_type":"product","json_param":{"firprice":"299.99","secprice":"149.99","skuid":"10001"}}'>
+  <div class="sgm_pc" data-exp='{"biz_type":"product","json_param":{"firprice":"149.99","secprice":"299.99","skuid":"10001"}}'>
     <a href="/dp/xiaomi-redmi-note-13/10001">
       <img alt="Xiaomi Redmi Note 13" src="https://img.joybuy.fr/phone.jpg" />
     </a>
-    <div class="productCartItem">149,99 €</div>
-    <div class="productCartItem">299,99 €</div>
   </div>
-  <div class="sgm_pc" data-exp='{"biz_type":"product","json_param":{"firprice":"149.99","secprice":"89.99","skuid":"10002"}}'>
+  <div class="sgm_pc" data-exp='{"biz_type":"product","json_param":{"firprice":"89.99","secprice":"149.99","skuid":"10002"}}'>
     <a href="/dp/amazfit-gtr-4/10002">
       <img alt="Amazfit GTR 4" src="https://img.joybuy.fr/watch.jpg" />
     </a>
-    <div class="productCartItem">89,99 €</div>
-    <div class="productCartItem">149,99 €</div>
   </div>
-  <div class="sgm_pc" data-exp='{"biz_type":"product","json_param":{"firprice":"349.99","secprice":"209.99","skuid":"10003"}}'>
+  <div class="sgm_pc" data-exp='{"biz_type":"product","json_param":{"firprice":"209.99","secprice":"349.99","skuid":"10003"}}'>
     <a href="/dp/sony-wh-1000xm5/10003">
       <img alt="Sony WH-1000XM5" src="https://img.joybuy.fr/headphones.jpg" />
     </a>
-    <div class="productCartItem">209,99 €</div>
-    <div class="productCartItem">349,99 €</div>
   </div>
 </body></html>
 `;
@@ -56,12 +51,10 @@ describe('parseDeals', () => {
 
   test('returns max 10 deals', () => {
     const items = Array.from({ length: 12 }, (_, i) => `
-      <div class="sgm_pc" data-exp='{"biz_type":"product","json_param":{"firprice":"${100 + i}.00","secprice":"${50 + i}.00","skuid":"${i}"}}'>
+      <div class="sgm_pc" data-exp='{"biz_type":"product","json_param":{"firprice":"${50 + i}.00","secprice":"${100 + i}.00","skuid":"${i}"}}'>
         <a href="/dp/product-${i}/${i}">
           <img alt="Product ${i}" src="https://img.joybuy.fr/item${i}.jpg" />
         </a>
-        <div class="productCartItem">${50 + i},00 €</div>
-        <div class="productCartItem">${100 + i},00 €</div>
       </div>
     `).join('');
     const html = `<html><body>${items}</body></html>`;
@@ -72,17 +65,15 @@ describe('parseDeals', () => {
   test('skips items with missing or unparseable prices', () => {
     const html = `
       <html><body>
-        <div class="sgm_pc" data-exp='{"biz_type":"product","json_param":{"secprice":"50.00","skuid":"bad"}}'>
+        <div class="sgm_pc" data-exp='{"biz_type":"product","json_param":{"firprice":"50.00","skuid":"bad"}}'>
           <a href="/dp/bad/bad">
             <img alt="Bad Item" src="https://img.joybuy.fr/bad.jpg" />
           </a>
         </div>
-        <div class="sgm_pc" data-exp='{"biz_type":"product","json_param":{"secprice":"60.00","skuid":"good"}}'>
+        <div class="sgm_pc" data-exp='{"biz_type":"product","json_param":{"firprice":"60.00","secprice":"100.00","skuid":"good"}}'>
           <a href="/dp/good/good">
             <img alt="Good Item" src="https://img.joybuy.fr/good.jpg" />
           </a>
-          <div class="productCartItem">60,00 €</div>
-          <div class="productCartItem">100,00 €</div>
         </div>
       </body></html>
     `;
@@ -91,15 +82,13 @@ describe('parseDeals', () => {
     expect(deals[0].title).toBe('Good Item');
   });
 
-  test('skips items with no data-exp and no productCartItem fallback', () => {
+  test('skips items with no data-exp', () => {
     const html = `
       <html><body>
-        <div class="sgm_pc" data-exp='{"biz_type":"product","json_param":{"secprice":"60.00","skuid":"123"}}'>
+        <div class="sgm_pc" data-exp='{"biz_type":"product","json_param":{"firprice":"60.00","secprice":"100.00","skuid":"123"}}'>
           <a href="/dp/good/123">
             <img alt="Good Product" src="https://img.joybuy.fr/good.jpg" />
           </a>
-          <div class="productCartItem">60,00 €</div>
-          <div class="productCartItem">100,00 €</div>
         </div>
         <div class="sgm_pc">
           <a href="/dp/bad/456">
@@ -124,10 +113,8 @@ describe('parseDeals', () => {
         <div class="sgm_pc" data-exp='{"biz_type":"banner","json_param":{}}'>
           <a href="/cms/sale"><img alt="Sale Banner" src="banner.jpg" /></a>
         </div>
-        <div class="sgm_pc" data-exp='{"biz_type":"product","json_param":{"secprice":"40.00","skuid":"p1"}}'>
+        <div class="sgm_pc" data-exp='{"biz_type":"product","json_param":{"firprice":"40.00","secprice":"80.00","skuid":"p1"}}'>
           <a href="/dp/real-product/p1"><img alt="Real Product" src="product.jpg" /></a>
-          <div class="productCartItem">40,00 €</div>
-          <div class="productCartItem">80,00 €</div>
         </div>
       </body></html>
     `;
@@ -138,15 +125,13 @@ describe('parseDeals', () => {
 });
 
 describe('parsePrice (via parseDeals)', () => {
-  test('handles European format: 1.299,00 € (dot thousands, comma decimal)', () => {
+  test('handles decimal prices from data-exp', () => {
     const html = `
       <html><body>
-        <div class="sgm_pc" data-exp='{"biz_type":"product","json_param":{"secprice":"-100","skuid":"tv1"}}'>
+        <div class="sgm_pc" data-exp='{"biz_type":"product","json_param":{"firprice":"799.00","secprice":"1299.00","skuid":"tv1"}}'>
           <a href="/dp/samsung-tv/tv1">
             <img alt="Samsung TV" src="img.jpg" />
           </a>
-          <div class="productCartItem">799,00 €</div>
-          <div class="productCartItem">1.299,00 €</div>
         </div>
       </body></html>`;
     const deals = parseDeals(html, 'https://www.joybuy.fr');
@@ -156,15 +141,13 @@ describe('parsePrice (via parseDeals)', () => {
     expect(deals[0].discountPct).toBeCloseTo(38, 0);
   });
 
-  test('handles simple comma decimal: 149,99 € via DOM fallback', () => {
+  test('handles decimal prices with cents', () => {
     const html = `
       <html><body>
-        <div class="sgm_pc" data-exp='{"biz_type":"product","json_param":{"firprice":"-100","secprice":"-100","skuid":"w1"}}'>
+        <div class="sgm_pc" data-exp='{"biz_type":"product","json_param":{"firprice":"89.99","secprice":"149.99","skuid":"w1"}}'>
           <a href="/dp/watch/w1">
             <img alt="Watch" src="img.jpg" />
           </a>
-          <div class="productCartItem">89,99 €</div>
-          <div class="productCartItem">149,99 €</div>
         </div>
       </body></html>`;
     const deals = parseDeals(html, 'https://www.joybuy.fr');
@@ -177,19 +160,15 @@ describe('parsePrice (via parseDeals)', () => {
 describe('extractDealsFromDOM', () => {
   beforeEach(() => {
     document.body.innerHTML = `
-      <div class="sgm_pc" data-exp='{"biz_type":"product","json_param":{"firprice":"299.99","secprice":"149.99","skuid":"10001"}}'>
+      <div class="sgm_pc" data-exp='{"biz_type":"product","json_param":{"firprice":"149.99","secprice":"299.99","skuid":"10001"}}'>
         <a href="/dp/xiaomi-redmi-note-13/10001">
           <img alt="Xiaomi Redmi Note 13" src="https://img.joybuy.fr/phone.jpg" />
         </a>
-        <div class="productCartItem">149,99 €</div>
-        <div class="productCartItem">299,99 €</div>
       </div>
-      <div class="sgm_pc" data-exp='{"biz_type":"product","json_param":{"firprice":"149.99","secprice":"89.99","skuid":"10002"}}'>
+      <div class="sgm_pc" data-exp='{"biz_type":"product","json_param":{"firprice":"89.99","secprice":"149.99","skuid":"10002"}}'>
         <a href="/dp/amazfit-gtr-4/10002">
           <img alt="Amazfit GTR 4" src="https://img.joybuy.fr/watch.jpg" />
         </a>
-        <div class="productCartItem">89,99 €</div>
-        <div class="productCartItem">149,99 €</div>
       </div>
     `;
   });

@@ -1,19 +1,19 @@
 // joybuy.fr is a client-side rendered Next.js SPA (App Router).
-// The homepage (which redirects from /) serves SSR product listings.
-// Product cards use the class "sgm_pc" (stable) with a "data-exp" JSON attribute
-// that contains pricing data (firprice = original, secprice = sale) and skuId.
-// CSS module class names (e.g. style_UK_product_card__XXXXX) have hashed suffixes
-// that change on every deploy, so we avoid relying on them.
+// The homepage serves SSR product listings. Product cards use the class "sgm_pc"
+// (stable) with a "data-exp" JSON attribute.
+//
+// IMPORTANT — verified against product detail page RSC payloads (2025-05):
+//   data-exp.firprice = sale price (maps to mainPrice on detail page)
+//   data-exp.secprice = crossed-out original price (maps to crossOffPrice on detail page)
+// The naming is counter-intuitive ("fir" = first/sale, "sec" = second/original).
+// .productCartItem DOM nodes render inflated MSRP reference values — do NOT use them.
 //
 // Real DOM structure observed on joybuy.fr (2025-05):
 //   <div class="sgm_pc style_UK_product_card__<hash>..."
-//        data-exp='{"biz_type":"product","json_param":{"firprice":"32.99","secprice":"19.99","skuid":"10177595",...}}'>
+//        data-exp='{"biz_type":"product","json_param":{"firprice":"26.64","secprice":"28.39","skuid":"10177595",...}}'>
 //     <a href="/dp/<slug>/<skuId>">
 //       <img alt="<product title>" class="style_UK_skuImg__<hash>" src="//images4.joy-sourcing.com/...">
 //     </a>
-//     <div class="style_title__<hash>"><product title></div>
-//     <div class="style_mainPrice__<hash> productCartItem ...">  <!-- sale price spans -->
-//     <div class="style_crossOffPrice__<hash> productCartItem"> <!-- original price spans -->
 //   </div>
 export const TARGET_URLS = [
   'https://www.joybuy.fr/',
@@ -32,9 +32,9 @@ const SELECTORS = {
   // Link: the anchor wrapping the product image always has href="/dp/..."
   link: 'a[href]',
   image: 'img',
-  // Prices come from data-exp JSON (firprice/secprice). DOM fallback selectors:
-  // .productCartItem is a stable non-hashed class applied to both price divs.
-  // The first .productCartItem child is the sale price; the second is the crossed-out original.
+  // Prices come exclusively from data-exp JSON (firprice=sale, secprice=original).
+  // .productCartItem is kept here for reference but NOT used — those nodes contain
+  // inflated MSRP reference values that do not match real product prices.
   salePriceContainer: '.productCartItem',
 };
 
@@ -54,21 +54,17 @@ export function parseDeals(html, baseUrl) {
       try {
         const exp = JSON.parse(dataExp);
         if (exp.biz_type !== 'product') return [];
-        const sec = parseFloat((exp.json_param || {}).secprice);
-        if (!isNaN(sec) && sec > 0) salePrice = sec;
+        const params = exp.json_param || {};
+        // On joybuy.fr homepage cards: firprice = sale price (mainPrice),
+        // secprice = crossed-out original price (crossOffPrice).
+        // .productCartItem DOM nodes contain inflated reference prices — do not use them.
+        const fir = parseFloat(params.firprice);
+        const sec = parseFloat(params.secprice);
+        if (!isNaN(fir) && fir > 0) salePrice = fir;
+        if (!isNaN(sec) && sec > 0) originalPrice = sec;
       } catch (_) {
-        // fall through to DOM parsing
+        return [];
       }
-    }
-
-    // .productCartItem: [0] = sale price, [1] = crossed-out original price.
-    // Always read originalPrice from DOM — data-exp.firprice is unreliable.
-    const priceContainers = Array.from(item.querySelectorAll(SELECTORS.salePriceContainer));
-    if (priceContainers.length >= 1 && salePrice === null) {
-      salePrice = parsePrice(priceContainers[0].textContent.trim());
-    }
-    if (priceContainers.length >= 2) {
-      originalPrice = parsePrice(priceContainers[1].textContent.trim());
     }
 
     const title = item.querySelector(SELECTORS.title)?.getAttribute('alt')?.trim();
@@ -110,28 +106,21 @@ export function extractDealsFromDOM() {
     let originalPrice = null;
     let salePrice = null;
 
-    // data-exp.firprice is an inflated internal reference price, NOT the displayed
-    // crossed-out price. Use data-exp only to filter non-product cards and read secprice.
+    // firprice = sale price (mainPrice), secprice = crossed-out original (crossOffPrice).
+    // .productCartItem DOM nodes contain inflated reference prices — do not use them.
     const dataExp = item.getAttribute('data-exp');
     if (dataExp) {
       try {
         const exp = JSON.parse(dataExp);
         if (exp.biz_type !== 'product') return [];
-        const sec = parseFloat((exp.json_param || {}).secprice);
-        if (!isNaN(sec) && sec > 0) salePrice = sec;
+        const params = exp.json_param || {};
+        const fir = parseFloat(params.firprice);
+        const sec = parseFloat(params.secprice);
+        if (!isNaN(fir) && fir > 0) salePrice = fir;
+        if (!isNaN(sec) && sec > 0) originalPrice = sec;
       } catch (_) {
-        // fall through to DOM parsing
+        return [];
       }
-    }
-
-    // .productCartItem: [0] = sale price, [1] = crossed-out original price.
-    // Always read originalPrice from DOM — data-exp.firprice is unreliable.
-    const priceContainers = Array.from(item.querySelectorAll('.productCartItem'));
-    if (priceContainers.length >= 1 && salePrice === null) {
-      salePrice = parsePrice(priceContainers[0].textContent.trim());
-    }
-    if (priceContainers.length >= 2) {
-      originalPrice = parsePrice(priceContainers[1].textContent.trim());
     }
 
     const title = item.querySelector('img[alt]')?.getAttribute('alt')?.trim();
