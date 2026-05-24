@@ -64,14 +64,9 @@ function scanUrl(url) {
                 } catch (_) { return []; }
               });
 
-              // Dump first 3 cards' raw data-exp for diagnosing filter failures
-              const cardSamples = Array.from(cards).slice(0, 3).map(card => {
-                try {
-                  const e = JSON.parse(card.getAttribute('data-exp') || '{}');
-                  const p = e.json_param || {};
-                  return `[${e.biz_type}|fir=${p.firprice}|sec=${p.secprice}|sku=${p.skuid}]`;
-                } catch { return '[parse-err]'; }
-              }).join(' ');
+              // Dump raw data-exp JSON for first card to see all field names
+              const rawFirst = cards[0]?.getAttribute('data-exp') || 'none';
+              const cardSamples = rawFirst.slice(0, 300);
               resolve({
                 deals,
                 diag: `url=${location.href.slice(22,60)} sgm_pc=${cards.length} samples=${cardSamples}`,
