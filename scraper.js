@@ -15,8 +15,21 @@
 //       <img alt="<product title>" class="style_UK_skuImg__<hash>" src="//images4.joy-sourcing.com/...">
 //     </a>
 //   </div>
+// All pages that list discounted products. Sourced from sitemap.xml (2025-05).
+// The homepage + all /promo/best-seller category pages.
 export const TARGET_URLS = [
   'https://www.joybuy.fr/',
+  'https://www.joybuy.fr/promo/best-seller',
+  'https://www.joybuy.fr/promo/best-seller/T%C3%A9l%C3%A9phones%20et%20tablettes/a76430fd6881430cb6b2b36d39612563',
+  'https://www.joybuy.fr/promo/best-seller/Audio%20et%20Hi-Fi/6e9d7d20232a45baa8c50cc5090e01a6',
+  'https://www.joybuy.fr/promo/best-seller/%C3%89lectrom%C3%A9nager/59e022726ab742beb6b817f0086ffd95',
+  'https://www.joybuy.fr/promo/best-seller/Petits%20Appareils%20de%20Cuisine/fcdaaae6a03b4525935cf47b9167668e',
+  'https://www.joybuy.fr/promo/best-seller/Entretien%20des%20Sols/665e1c40b9dc4274b03168ee8beea9a8',
+  'https://www.joybuy.fr/promo/best-seller/Soin%20de%20la%20Peau/2794c8ae37a74bcb8e0e37b4faefa517',
+  'https://www.joybuy.fr/promo/best-seller/Jeux%20Vid%C3%A9os%20et%20consoles/d80ce4bd8f6c407d8d43fbcd76778a48',
+  'https://www.joybuy.fr/promo/best-seller/Maquillage/70599b62b611492aabc41778ac251978',
+  'https://www.joybuy.fr/promo/best-seller/Machines%20%C3%A0%20Caf%C3%A9/87a52eea3aa448c9b601661c119c73b0',
+  'https://www.joybuy.fr/promo/best-seller/Maison%20%26%20D%C3%A9coration/d8040e8a42274c61946b7438d421dc31',
 ];
 
 // SELECTORS used by parseDeals (DOM-based, for test fixtures and DOMParser use).

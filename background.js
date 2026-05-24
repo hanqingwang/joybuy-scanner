@@ -10,7 +10,9 @@ export async function setupAlarm() {
   }
 }
 
-export async function scanDeals() {
+// Opens a single URL in a hidden tab, waits for product cards to hydrate,
+// extracts deals, closes the tab. Resolves with a deals array (may be empty).
+function scanUrl(url) {
   return new Promise((resolve, reject) => {
     let tabId = null;
     let timeout = null;
@@ -24,27 +26,21 @@ export async function scanDeals() {
       if (updatedTabId !== tabId || changeInfo.status !== 'complete') return;
       cleanup();
 
-      // Inject a polling wrapper: wait up to 8s for React to hydrate product cards,
-      // then run the real extractor. Returns deals array (may be empty).
+      // Polls up to 8s for React hydration, then extracts deals from .sgm_pc cards.
+      // Self-contained: no module scope available inside executeScript.
       function extractWithRetry() {
         return new Promise(resolve => {
           const deadline = Date.now() + 8000;
 
           function attempt() {
-            // Check if the page redirected to login
             if (location.href.includes('/login') || document.title.includes('403')) {
-              resolve({ deals: [], diagnostic: 'login_wall: ' + location.href });
+              resolve([]);
               return;
             }
-
             const cards = document.querySelectorAll('.sgm_pc');
             if (cards.length > 0 || Date.now() >= deadline) {
-              // Run the real extractor inline (self-contained copy)
               const baseUrl = 'https://www.joybuy.fr';
-              const items = Array.from(document.querySelectorAll('.sgm_pc'));
-              const deals = items.flatMap(item => {
-                let originalPrice = null;
-                let salePrice = null;
+              const deals = Array.from(cards).flatMap(item => {
                 const dataExp = item.getAttribute('data-exp');
                 if (!dataExp) return [];
                 try {
@@ -53,37 +49,25 @@ export async function scanDeals() {
                   const params = exp.json_param || {};
                   const fir = parseFloat(params.firprice);
                   const sec = parseFloat(params.secprice);
-                  if (!isNaN(fir) && fir > 0) originalPrice = fir;
-                  if (!isNaN(sec) && sec > 0) salePrice = sec;
+                  const originalPrice = (!isNaN(fir) && fir > 0) ? fir : null;
+                  const salePrice = (!isNaN(sec) && sec > 0) ? sec : null;
+                  if (!originalPrice || !salePrice || originalPrice <= salePrice) return [];
+                  const skuid = params.skuid || '';
+                  const title = item.querySelector('img[alt]')?.getAttribute('alt')?.trim();
+                  const href = item.querySelector('a[href]')?.getAttribute('href');
+                  const src = item.querySelector('img')?.getAttribute('src');
+                  if (!title) return [];
+                  const discountPct = Math.round(((originalPrice - salePrice) / originalPrice) * 100);
+                  const url = href ? new URL(href, baseUrl).href : baseUrl;
+                  const imageUrl = src ? (src.startsWith('//') ? 'https:' + src : src) : '';
+                  return [{ skuid, title, originalPrice, salePrice, discountPct, url, imageUrl }];
                 } catch (_) { return []; }
-                const title = item.querySelector('img[alt]')?.getAttribute('alt')?.trim();
-                const href = item.querySelector('a[href]')?.getAttribute('href');
-                const src = item.querySelector('img')?.getAttribute('src');
-                if (!title || !originalPrice || !salePrice || originalPrice <= salePrice) return [];
-                const discountPct = Math.round(((originalPrice - salePrice) / originalPrice) * 100);
-                const url = href ? new URL(href, baseUrl).href : baseUrl;
-                const imageUrl = src ? (src.startsWith('//') ? 'https:' + src : src) : '';
-                return [{ title, originalPrice, salePrice, discountPct, url, imageUrl }];
-              }).sort((a, b) => b.discountPct - a.discountPct).slice(0, 10);
-
-              // Dump first 5 cards' raw data-exp for debugging
-              const cardDump = Array.from(cards).slice(0, 5).map(card => {
-                try {
-                  const e = JSON.parse(card.getAttribute('data-exp') || '{}');
-                  const p = e.json_param || {};
-                  return `[${e.biz_type}] fir=${p.firprice} sec=${p.secprice} title=${card.querySelector('img')?.alt?.slice(0,20)}`;
-                } catch { return 'parse-error'; }
               });
-
-              resolve({
-                deals,
-                diagnostic: `sgm_pc:${cards.length} url:${location.href} title:${document.title} | ${cardDump.join(' | ')}`,
-              });
+              resolve(deals);
             } else {
               setTimeout(attempt, 500);
             }
           }
-
           attempt();
         });
       }
@@ -94,30 +78,50 @@ export async function scanDeals() {
           const err = chrome.runtime.lastError;
           chrome.tabs.remove(tabId);
           if (err) { reject(new Error(err.message)); return; }
-          const result = results?.[0]?.result;
-          if (result?.diagnostic) {
-            console.log('[joybuy-scanner] diagnostic:', result.diagnostic);
-          }
-          resolve(result?.deals ?? []);
+          resolve(results?.[0]?.result ?? []);
         }
       );
     }
 
-    chrome.tabs.create({ url: TARGET_URLS[0], active: false }, tab => {
+    chrome.tabs.create({ url, active: false }, tab => {
       if (chrome.runtime.lastError) {
         reject(new Error(chrome.runtime.lastError.message));
         return;
       }
       tabId = tab.id;
       chrome.tabs.onUpdated.addListener(onTabUpdated);
-
       timeout = setTimeout(() => {
         cleanup();
         chrome.tabs.remove(tabId);
-        reject(new Error('scan timed out'));
+        resolve([]); // timeout on one page shouldn't abort the whole scan
       }, 30000);
     });
   });
+}
+
+// Scans all TARGET_URLS sequentially, deduplicates by skuid, returns top 10 by discount.
+export async function scanDeals() {
+  const seen = new Set();
+  const all = [];
+
+  for (const url of TARGET_URLS) {
+    try {
+      const deals = await scanUrl(url);
+      for (const deal of deals) {
+        const key = deal.skuid || deal.url;
+        if (!seen.has(key)) {
+          seen.add(key);
+          all.push(deal);
+        }
+      }
+    } catch (_) {
+      // one failing page doesn't abort the scan
+    }
+  }
+
+  return all
+    .sort((a, b) => b.discountPct - a.discountPct)
+    .slice(0, 10);
 }
 
 export async function handleAlarm(alarm, _scanDeals = scanDeals) {
