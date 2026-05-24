@@ -102,6 +102,43 @@ describe('parseDeals', () => {
   });
 });
 
+describe('parsePrice (via parseDeals)', () => {
+  test('handles European format: 1.299,00 € (dot thousands, comma decimal)', () => {
+    const html = `
+      <html><body>
+        <div class="product-item">
+          <a href="/product/tv"><img src="img.jpg" />
+            <h3 class="product-title">Samsung TV</h3>
+            <del class="original-price">1.299,00 €</del>
+            <span class="sale-price">799,00 €</span>
+          </a>
+        </div>
+      </body></html>`;
+    const deals = parseDeals(html, 'https://www.joybuy.fr');
+    expect(deals.length).toBe(1);
+    expect(deals[0].originalPrice).toBeCloseTo(1299.0, 1);
+    expect(deals[0].salePrice).toBeCloseTo(799.0, 1);
+    expect(deals[0].discountPct).toBeCloseTo(38, 0);
+  });
+
+  test('handles simple comma decimal: 149,99 €', () => {
+    const html = `
+      <html><body>
+        <div class="product-item">
+          <a href="/product/watch"><img src="img.jpg" />
+            <h3 class="product-title">Watch</h3>
+            <del class="original-price">149,99 €</del>
+            <span class="sale-price">89,99 €</span>
+          </a>
+        </div>
+      </body></html>`;
+    const deals = parseDeals(html, 'https://www.joybuy.fr');
+    expect(deals.length).toBe(1);
+    expect(deals[0].originalPrice).toBeCloseTo(149.99, 2);
+    expect(deals[0].salePrice).toBeCloseTo(89.99, 2);
+  });
+});
+
 describe('extractDealsFromDOM', () => {
   beforeEach(() => {
     document.body.innerHTML = `

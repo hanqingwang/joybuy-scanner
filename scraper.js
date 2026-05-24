@@ -58,7 +58,10 @@ export function extractDealsFromDOM() {
 
   function parsePrice(text) {
     if (!text) return null;
-    const num = parseFloat(text.replace(/[^\d.,]/g, '').replace(',', '.'));
+    const cleaned = text.replace(/[^\d.,]/g, '');
+    // Remove thousands-separator dots (e.g. "1.299,00" → "1299,00")
+    const normalised = cleaned.replace(/\.(?=\d{3}(?:[,]|$))/g, '').replace(',', '.');
+    const num = parseFloat(normalised);
     return isNaN(num) ? null : num;
   }
 
@@ -90,6 +93,9 @@ export function extractDealsFromDOM() {
 
 function parsePrice(text) {
   if (!text) return null;
-  const num = parseFloat(text.replace(/[^\d.,]/g, '').replace(',', '.'));
+  const cleaned = text.replace(/[^\d.,]/g, '');
+  // Remove thousands-separator dots (e.g. "1.299,00" → "1299,00")
+  const normalised = cleaned.replace(/\.(?=\d{3}(?:[,]|$))/g, '').replace(',', '.');
+  const num = parseFloat(normalised);
   return isNaN(num) ? null : num;
 }
