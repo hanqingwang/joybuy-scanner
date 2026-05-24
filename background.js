@@ -39,13 +39,6 @@ function scanUrl(url) {
             }
             const cards = document.querySelectorAll('.sgm_pc');
             if (cards.length > 0 || Date.now() >= deadline) {
-              if (cards.length === 0) {
-                // Help diagnose why no cards: report what IS in the DOM
-                const dpLinks = document.querySelectorAll('a[href*="/dp/"]').length;
-                const dataExpEls = document.querySelectorAll('[data-exp]').length;
-                const firstClass = document.querySelector('[class*="product"], [class*="card"], [class*="item"]')?.className?.slice(0, 80) || 'none';
-                console.log(`[joybuy-scanner] 0 cards on ${location.href} — dpLinks:${dpLinks} dataExp:${dataExpEls} firstProductClass:${firstClass} title:${document.title.slice(0,40)}`);
-              }
               const baseUrl = 'https://www.joybuy.fr';
               const deals = Array.from(cards).flatMap(item => {
                 const dataExp = item.getAttribute('data-exp');
@@ -70,7 +63,15 @@ function scanUrl(url) {
                   return [{ skuid, title, originalPrice, salePrice, discountPct, url, imageUrl }];
                 } catch (_) { return []; }
               });
-              resolve(deals);
+
+              // Return diagnostic alongside deals so service worker can log it
+              const dpLinks = document.querySelectorAll('a[href*="/dp/"]').length;
+              const dataExpEls = document.querySelectorAll('[data-exp]').length;
+              const bodySnippet = document.body.innerHTML.slice(0, 200);
+              resolve({
+                deals,
+                diag: `url=${location.href} title=${document.title.slice(0,40)} sgm_pc=${cards.length} dpLinks=${dpLinks} dataExp=${dataExpEls} body=${bodySnippet}`,
+              });
             } else {
               setTimeout(attempt, 500);
             }
@@ -85,7 +86,9 @@ function scanUrl(url) {
           const err = chrome.runtime.lastError;
           chrome.tabs.remove(tabId);
           if (err) { reject(new Error(err.message)); return; }
-          resolve(results?.[0]?.result ?? []);
+          const result = results?.[0]?.result;
+          if (result?.diag) console.log('[joybuy-scanner] page diag:', result.diag);
+          resolve(result?.deals ?? []);
         }
       );
     }
