@@ -66,9 +66,18 @@ export async function scanDeals() {
                 return [{ title, originalPrice, salePrice, discountPct, url, imageUrl }];
               }).sort((a, b) => b.discountPct - a.discountPct).slice(0, 10);
 
+              // Dump first 5 cards' raw data-exp for debugging
+              const cardDump = Array.from(cards).slice(0, 5).map(card => {
+                try {
+                  const e = JSON.parse(card.getAttribute('data-exp') || '{}');
+                  const p = e.json_param || {};
+                  return `[${e.biz_type}] fir=${p.firprice} sec=${p.secprice} title=${card.querySelector('img')?.alt?.slice(0,20)}`;
+                } catch { return 'parse-error'; }
+              });
+
               resolve({
                 deals,
-                diagnostic: `sgm_pc:${cards.length} url:${location.href} title:${document.title}`,
+                diagnostic: `sgm_pc:${cards.length} url:${location.href} title:${document.title} | ${cardDump.join(' | ')}`,
               });
             } else {
               setTimeout(attempt, 500);
