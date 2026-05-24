@@ -1,5 +1,33 @@
 <!DOCTYPE html>
 <html lang="fr">
-<head><meta charset="UTF-8" /><title>JoyBuy Deal Scanner</title></head>
-<body><p>Loading...</p></body>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JoyBuy Deal Scanner</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header>
+    <div class="header-brand">
+      <span class="header-icon">🏷️</span>
+      <span class="header-title">JoyBuy Deal Scanner</span>
+    </div>
+    <button id="scan-now-btn">Scan Now</button>
+  </header>
+
+  <div class="status-bar">
+    <span id="last-scan-text">Chargement...</span>
+    <span id="deal-count-text"></span>
+  </div>
+
+  <div id="deal-list"></div>
+
+  <footer>
+    <a id="joybuy-link" href="https://www.joybuy.fr/promotions" target="_blank">
+      Voir toutes les offres sur joybuy.fr →
+    </a>
+  </footer>
+
+  <script src="popup.js" type="module"></script>
+</body>
 </html>
