@@ -39,6 +39,13 @@ function scanUrl(url) {
             }
             const cards = document.querySelectorAll('.sgm_pc');
             if (cards.length > 0 || Date.now() >= deadline) {
+              if (cards.length === 0) {
+                // Help diagnose why no cards: report what IS in the DOM
+                const dpLinks = document.querySelectorAll('a[href*="/dp/"]').length;
+                const dataExpEls = document.querySelectorAll('[data-exp]').length;
+                const firstClass = document.querySelector('[class*="product"], [class*="card"], [class*="item"]')?.className?.slice(0, 80) || 'none';
+                console.log(`[joybuy-scanner] 0 cards on ${location.href} — dpLinks:${dpLinks} dataExp:${dataExpEls} firstProductClass:${firstClass} title:${document.title.slice(0,40)}`);
+              }
               const baseUrl = 'https://www.joybuy.fr';
               const deals = Array.from(cards).flatMap(item => {
                 const dataExp = item.getAttribute('data-exp');
@@ -107,6 +114,7 @@ export async function scanDeals() {
   for (const url of TARGET_URLS) {
     try {
       const deals = await scanUrl(url);
+      console.log(`[joybuy-scanner] ${new URL(url).pathname} → ${deals.length} deals`);
       for (const deal of deals) {
         const key = deal.skuid || deal.url;
         if (!seen.has(key)) {
@@ -114,8 +122,8 @@ export async function scanDeals() {
           all.push(deal);
         }
       }
-    } catch (_) {
-      // one failing page doesn't abort the scan
+    } catch (err) {
+      console.log(`[joybuy-scanner] ${new URL(url).pathname} → ERROR: ${err.message}`);
     }
   }
 
